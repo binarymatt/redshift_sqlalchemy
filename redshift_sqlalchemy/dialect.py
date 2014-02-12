@@ -1,3 +1,6 @@
+import sqlalchemy.types as sqltypes
+
+from sqlalchemy.dialects.postgresql.base import ENUM
 from sqlalchemy.dialects.postgresql.psycopg2 import PGDialect_psycopg2
 from sqlalchemy.engine import reflection
 from sqlalchemy import util, exc
@@ -9,6 +12,61 @@ from sqlalchemy.sql.expression import BindParameter
 
 class RedshiftDialect(PGDialect_psycopg2):
     name = 'redshift'
+
+    def initialize(self, connection):
+        #super(PGDialect, self).initialize(connection)
+        #can't call super as that has the error
+        #we also need t to replicate DefaultDialect's functionality since
+        # we are not utilizing the inheritence of this correctly.
+        try:
+            self.server_version_info = \
+                            self._get_server_version_info(connection)
+        except NotImplementedError:
+            self.server_version_info = None
+        try:
+            self.default_schema_name = \
+                            self._get_default_schema_name(connection)
+        except NotImplementedError:
+            self.default_schema_name = None
+
+        try:
+            self.default_isolation_level = \
+                        self.get_isolation_level(connection.connection)
+        except NotImplementedError:
+            self.default_isolation_level = None
+
+        self.returns_unicode_strings = self._check_unicode_returns(connection)
+
+        if self.description_encoding is not None and \
+            self._check_unicode_description(connection):
+            self._description_decoder = self.description_encoding = None
+
+        self.do_rollback(connection.connection)
+
+
+        self.implicit_returning = self.server_version_info > (8, 2) and \
+                            self.__dict__.get('implicit_returning', True)
+        self.supports_native_enum = self.server_version_info >= (8, 3)
+        if not self.supports_native_enum:
+            self.colspecs = self.colspecs.copy()
+            # pop base Enum type
+            self.colspecs.pop(sqltypes.Enum, None)
+            # psycopg2, others may have placed ENUM here as well
+            self.colspecs.pop(ENUM, None)
+
+        # http://www.postgresql.org/docs/9.3/static/release-9-2.html#AEN116689
+        self.supports_smallserial = self.server_version_info >= (9, 2)
+
+        #PGDialect has
+        #self._backslash_escapes = connection.scalar(
+        #                            "show standard_conforming_strings"
+        #                            ) == 'off'
+        # which fails for us so we set it like
+        self._backslash_escapes = False
+        #we also can't utilize anything in PGDialect_psycopg2 so
+        # we don't have to call it or reimplement it
+
+
     @reflection.cache
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         """
