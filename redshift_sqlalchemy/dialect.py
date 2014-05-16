@@ -9,45 +9,45 @@ from sqlalchemy.types import VARCHAR, NullType
 
 class RedShiftDDLCompiler(PGDDLCompiler):
     ''' Handles Redshift specific create table syntax.
-    
+
     Users can specify the DISTSTYLE, DISTKEY, SORTKEY and ENCODE properties per
-    table and per column. 
-    
-    Table level properties can be set using the dialect specific syntax. For 
+    table and per column.
+
+    Table level properties can be set using the dialect specific syntax. For
     example, to specify a distkey and style you apply the following ::
-    
-        table = Table(metadata, 
+
+        table = Table(metadata,
                       Column('id', Integer, primary_key=True),
                       Column('name', String),
                       redshift_diststyle="KEY",
                       redshift_distkey="id"
                       redshift_sortkey=["id", "name"]
                       )
-                      
+
     A single sortkey can be applied without a wrapping list ::
-    
-        table = Table(metadata, 
+
+        table = Table(metadata,
                       Column('id', Integer, primary_key=True),
                       Column('name', String),
                       redshift_sortkey="id"
                       )
-                      
-    Column level special syntax can also be applied using the column info 
+
+    Column level special syntax can also be applied using the column info
     dictionary. For example, we can specify the encode for a column ::
-    
-        table = Table(metadata, 
+
+        table = Table(metadata,
                       Column('id', Integer, primary_key=True),
                       Column('name', String, info={"encode":"lzo"})
                       )
-                      
+
     We can also specify the distkey and sortkey options ::
-    
-        table = Table(metadata, 
+
+        table = Table(metadata,
                       Column('id', Integer, primary_key=True),
-                      Column('name', String, 
+                      Column('name', String,
                              info={"distkey":True, "sortkey":True})
                       )
-                      
+
     '''
 
     def post_create_table(self, table):
@@ -79,13 +79,13 @@ class RedShiftDDLCompiler(PGDDLCompiler):
         # removed support for them here.
         colspec = self.preparer.format_column(column)
         colspec += " " + self.dialect.type_compiler.process(column.type)
- 
+
         colspec += self._fetch_redshift_column_attributes(column)
- 
+
         default = self.get_column_default_string(column)
         if default is not None:
             colspec += " DEFAULT " + default
- 
+
         if not column.nullable:
             colspec += " NOT NULL"
         return colspec
@@ -108,24 +108,25 @@ class RedShiftDDLCompiler(PGDDLCompiler):
             text += " SORTKEY"
         return text
 
+
 class RedshiftDialect(PGDialect_psycopg2):
     name = 'redshift'
     ddl_compiler = RedShiftDDLCompiler
-    
+
     construct_arguments = [
-                            (schema.Index, {
-                                "using": False,
-                                "where": None,
-                                "ops": {}
-                            }),
-                            (schema.Table, {
-                                "ignore_search_path": False,
-                                'diststyle': None,
-                                'distkey': None,
-                                'sortkey': None
-                            }),
-                           ]
-    
+        (schema.Index, {
+            "using": False,
+            "where": None,
+            "ops": {}
+        }),
+        (schema.Table, {
+            "ignore_search_path": False,
+            'diststyle': None,
+            'distkey': None,
+            'sortkey': None
+        }),
+    ]
+
     @reflection.cache
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         """
@@ -140,7 +141,7 @@ class RedshiftDialect(PGDialect_psycopg2):
         """
         return []
 
-    #def set_isolation_level(self, connection, level):
+    # def set_isolation_level(self, connection, level):
     #    from psycopg2 import extensions
     #    connection.set_isolation_level(extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
@@ -179,7 +180,7 @@ class UnloadFromSelect(Executable, ClauseElement):
     ''' Prepares a RedShift unload statement to drop a query to Amazon S3
     http://docs.aws.amazon.com/redshift/latest/dg/r_UNLOAD_command_examples.html
     '''
-    def __init__(self, select, bucket, access_key, secret_key):
+    def __init__(self, select, bucket, access_key, secret_key, parallel='ON'):
         ''' Initializes an UnloadFromSelect instance
 
         Args:
@@ -188,30 +189,34 @@ class UnloadFromSelect(Executable, ClauseElement):
             bucket: The Amazon S3 bucket where the result will be stored
             access_key: The Amazon Access Key ID
             secret_key: The Amazon Secret Access Key
+            parallel: If 'ON' the result will be written to multiple files. If
+                'OFF' the result will write to one (1) file up to 6.2GB before
+                splitting
         '''
         self.select = select
         self.bucket = bucket
         self.access_key = access_key
         self.secret_key = secret_key
+        self.parallel = parallel
 
 
 @compiles(UnloadFromSelect)
 def visit_unload_from_select(element, compiler, **kw):
     ''' Returns the actual sql query for the UnloadFromSelect class
     '''
-    return "unload ('%(query)s') to '%(bucket)s' credentials 'aws_access_key_id=%(access_key)s;aws_secret_access_key=%(secret_key)s' delimiter ',' addquotes allowoverwrite" % {
+    return "unload ('%(query)s') to '%(bucket)s' credentials 'aws_access_key_id=%(access_key)s;aws_secret_access_key=%(secret_key)s' delimiter ',' addquotes allowoverwrite parallel %(parallel)s" % {
         'query': compiler.process(element.select, unload_select=True, literal_binds=True),
         'bucket': element.bucket,
         'access_key': element.access_key,
         'secret_key': element.secret_key,
+        'parallel': element.parallel,
     }
+
 
 @compiles(BindParameter)
 def visit_bindparam(bindparam, compiler, **kw):
-    #print bindparam
     res = compiler.visit_bindparam(bindparam, **kw)
     if 'unload_select' in kw:
-        #process param and return
         res = res.replace("'", "\\'")
         res = res.replace('%', '%%')
         return res
