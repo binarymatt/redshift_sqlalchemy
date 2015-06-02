@@ -13,7 +13,7 @@ Requirements
 
 Usage
 -----
-DSN format is simpilar to that of regular postgres:
+DSN format is similar to that of regular postgres:
 
 	from sqlalchemy import create_engine
 	
@@ -22,5 +22,5 @@ DSN format is simpilar to that of regular postgres:
 Notes
 -----
 
-Currently, contraints and indexes return nothing when intropecting tables. This comes from the redshift implementation of the postgresql api == 8.0
+Contraints and indexes currently return nothing when intropecting tables.  This comes from the redshift implementation of the postgresql api == 8.0
 
