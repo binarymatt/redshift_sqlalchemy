@@ -1,26 +1,17 @@
 redshift_sqlalchemy
-==================
+===================
 
-Amazon Redshift dialect for sqlalchemy.
+Amazon Redshift dialect for SQLAlchemy.
 
-.. image:: https://travis-ci.org/binarydud/redshift_sqlalchemy.png?branch=master
-
-Requirements
--------------
-* pysocpg2 >= 2.5
-* SQLAlchemy 0.8
-
+.. image:: https://travis-ci.org/graingert/redshift_sqlalchemy.png?branch=master
 
 Usage
 -----
-DSN format is simpilar to that of regular postgres:
+The DSN format is similar to that of regular Postgres::
 
-	from sqlalchemy import create_engine
-	
-	engine = create_engine("redshift+psycopg2://username@host.amazonaws.com:5439/database"
+    >>> import sqlalchemy as sa
+    >>> sa.create_engine('redshift+psycopg2://username@host.amazonaws.com:5439/database')
+    Engine(redshift+psycopg2://username@host.amazonaws.com:5439/database)
 
-Notes
------
-
-Currently, contraints and indexes return nothing when intropecting tables. This comes from the redshift implementation of the postgresql api == 8.0
-
+See the docstring for `RedshiftDDLCompiler` in
+`dialect.py <redshift_sqlalchemy/dialect.py>`_ for more detail.
